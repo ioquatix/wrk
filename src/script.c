@@ -209,11 +209,13 @@ void script_header_done(lua_State *L, luaL_Buffer *buffer) {
     luaL_pushresult(buffer);
 }
 
-void script_summary(lua_State *L, uint64_t duration, uint64_t requests, uint64_t bytes) {
+void script_summary(lua_State *L, config * cfg, uint64_t duration, uint64_t requests, uint64_t bytes) {
     const table_field fields[] = {
         { "duration", LUA_TNUMBER, &duration },
         { "requests", LUA_TNUMBER, &requests },
         { "bytes",    LUA_TNUMBER, &bytes    },
+        { "connections", LUA_TNUMBER, &cfg->connections },
+        { "threads", LUA_TNUMBER, &cfg->threads },
         { NULL,       0,           NULL      },
     };
     lua_newtable(L);
