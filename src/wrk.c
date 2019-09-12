@@ -4,19 +4,7 @@
 #include "script.h"
 #include "main.h"
 
-static struct config {
-    uint64_t connections;
-    uint64_t duration;
-    uint64_t threads;
-    uint64_t timeout;
-    uint64_t pipeline;
-    bool     delay;
-    bool     dynamic;
-    bool     latency;
-    char    *host;
-    char    *script;
-    SSL_CTX *ctx;
-} cfg;
+static config cfg;
 
 static struct {
     stats *latency;
@@ -191,7 +179,7 @@ int main(int argc, char **argv) {
     printf("Transfer/sec: %10sB\n", format_binary(bytes_per_s));
 
     if (script_has_done(L)) {
-        script_summary(L, runtime_us, complete, bytes);
+        script_summary(L, &cfg, runtime_us, complete, bytes);
         script_errors(L, &errors);
         script_done(L, statistics.latency, statistics.requests);
     }
