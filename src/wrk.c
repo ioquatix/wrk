@@ -197,11 +197,15 @@ void *thread_main(void *arg) {
         script_request(thread->L, &request, &length);
     }
 
+    thread->stopped = 0;
+
     thread->cs = zcalloc(thread->connections * sizeof(connection));
     connection *c = thread->cs;
 
     for (uint64_t i = 0; i < thread->connections; i++, c++) {
         c->thread = thread;
+        c->complete = 0;
+        c->finished = false;
         c->ssl     = cfg.ctx ? SSL_new(cfg.ctx) : NULL;
         c->request = request;
         c->length  = length;
@@ -214,6 +218,11 @@ void *thread_main(void *arg) {
 
     thread->start = time_us();
     aeMain(loop);
+
+    for (uint64_t i = 0; i < thread->connections; i++) {
+        connection * c = &thread->cs[i];
+        printf("connection %ld: %ld/%ld requests completed\n", i, c->complete, thread->requests);
+    }
 
     aeDeleteEventLoop(loop);
     zfree(thread->cs);
@@ -230,6 +239,8 @@ static int connect_socket(thread *thread, connection *c) {
 
     flags = fcntl(fd, F_GETFL, 0);
     fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+
+    c->start = time_us();
 
     if (connect(fd, addr->ai_addr, addr->ai_addrlen) == -1) {
         if (errno != EINPROGRESS) goto error;
@@ -258,6 +269,15 @@ static int reconnect_socket(thread *thread, connection *c) {
     return connect_socket(thread, c);
 }
 
+static void disconnect_socket(thread *thread, connection *c) {
+    aeDeleteFileEvent(thread->loop, c->fd, AE_WRITABLE | AE_READABLE);
+    sock.close(c);
+    close(c->fd);
+
+    thread->stopped += 1;
+    c->finished = true;
+}
+
 static int record_rate(aeEventLoop *loop, long long id, void *data) {
     thread *thread = data;
 
@@ -271,7 +291,9 @@ static int record_rate(aeEventLoop *loop, long long id, void *data) {
         thread->start    = time_us();
     }
 
-    if (stop) aeStop(loop);
+    if (thread->stopped == thread->connections) {
+        aeStop(loop);
+    }
 
     return RECORD_INTERVAL_MS;
 }
@@ -315,6 +337,7 @@ static int response_complete(http_parser *parser) {
     uint64_t now = time_us();
     int status = parser->status_code;
 
+    c->complete++;
     thread->complete++;
     thread->requests++;
 
@@ -336,14 +359,17 @@ static int response_complete(http_parser *parser) {
         aeCreateFileEvent(thread->loop, c->fd, AE_WRITABLE, socket_writeable, c);
     }
 
-    if (!http_should_keep_alive(parser)) {
-        reconnect_socket(thread, c);
-        goto done;
+    if (stop) {
+        disconnect_socket(thread, c);
+        return 0;
     }
 
-    http_parser_init(parser, HTTP_RESPONSE);
+    if (!http_should_keep_alive(parser)) {
+        reconnect_socket(thread, c);
+    } else {
+        http_parser_init(parser, HTTP_RESPONSE);
+    }
 
-  done:
     return 0;
 }
 

@@ -43,6 +43,7 @@ typedef struct {
     aeEventLoop *loop;
     struct addrinfo *addr;
     uint64_t connections;
+    uint64_t stopped;
     uint64_t complete;
     uint64_t requests;
     uint64_t bytes;
@@ -68,6 +69,8 @@ typedef struct connection {
     SSL *ssl;
     bool delayed;
     uint64_t start;
+    uint64_t complete;
+    bool finished;
     char *request;
     size_t length;
     size_t written;
