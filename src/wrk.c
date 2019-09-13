@@ -93,6 +93,7 @@ int main(int argc, char **argv) {
         thread *t      = &threads[i];
         t->loop        = aeCreateEventLoop(10 + cfg.connections * 3);
         t->connections = cfg.connections / cfg.threads;
+        t->timeout     = cfg.timeout;
 
         t->L = script_create(cfg.script, url, headers);
         script_init(L, t, argc - optind, &argv[optind]);
@@ -217,6 +218,7 @@ void *thread_main(void *arg) {
     aeCreateTimeEvent(loop, RECORD_INTERVAL_MS, record_rate, thread, NULL);
 
     thread->start = time_us();
+    thread->stop = 0;
     aeMain(loop);
 
     for (uint64_t i = 0; i < thread->connections; i++) {
@@ -266,16 +268,15 @@ static int reconnect_socket(thread *thread, connection *c) {
     aeDeleteFileEvent(thread->loop, c->fd, AE_WRITABLE | AE_READABLE);
     sock.close(c);
     close(c->fd);
-    return connect_socket(thread, c);
-}
 
-static void disconnect_socket(thread *thread, connection *c) {
-    aeDeleteFileEvent(thread->loop, c->fd, AE_WRITABLE | AE_READABLE);
-    sock.close(c);
-    close(c->fd);
+    if (stop) {
+        thread->stopped += 1;
+        c->finished = true;
+    } else {
+        return connect_socket(thread, c);
+    }
 
-    thread->stopped += 1;
-    c->finished = true;
+    return 0;
 }
 
 static int record_rate(aeEventLoop *loop, long long id, void *data) {
@@ -293,6 +294,22 @@ static int record_rate(aeEventLoop *loop, long long id, void *data) {
 
     if (thread->stopped == thread->connections) {
         aeStop(loop);
+    } else if (stop) {
+        uint64_t now = time_us();
+        if (thread->stop) {
+            uint64_t duration = now - thread->stop;
+            if (duration > (thread->timeout*1000)) {
+                for (size_t i = 0; i < thread->connections; i++) {
+                    connection * connection = thread->cs + i;
+                    if (!connection->finished) {
+                        thread->errors.timeout += 1;
+                    }
+                }
+                aeStop(loop);
+            }
+        } else {
+            thread->stop = now;
+        }
     }
 
     return RECORD_INTERVAL_MS;
@@ -359,12 +376,7 @@ static int response_complete(http_parser *parser) {
         aeCreateFileEvent(thread->loop, c->fd, AE_WRITABLE, socket_writeable, c);
     }
 
-    if (stop) {
-        disconnect_socket(thread, c);
-        return 0;
-    }
-
-    if (!http_should_keep_alive(parser)) {
+    if (stop || !http_should_keep_alive(parser)) {
         reconnect_socket(thread, c);
     } else {
         http_parser_init(parser, HTTP_RESPONSE);

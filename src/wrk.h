@@ -42,12 +42,25 @@ typedef struct {
     pthread_t thread;
     aeEventLoop *loop;
     struct addrinfo *addr;
+
+    // Total number of connections:
     uint64_t connections;
+
+    // Number of stopped connections:
     uint64_t stopped;
+
+    // Number of complete requests:
     uint64_t complete;
     uint64_t requests;
     uint64_t bytes;
+
+    // Timestamps:
     uint64_t start;
+    uint64_t stop;
+
+    // How long to wait until killing connections.
+    uint64_t timeout;
+
     lua_State *L;
     errors errors;
     struct connection *cs;
