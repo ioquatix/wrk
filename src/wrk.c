@@ -223,7 +223,7 @@ void *thread_main(void *arg) {
 
     for (uint64_t i = 0; i < thread->connections; i++) {
         connection * c = &thread->cs[i];
-        printf("connection %ld: %ld/%ld requests completed\n", i, c->complete, thread->requests);
+        printf("connection %ld: %ld requests completed\n", i, c->complete);
     }
 
     aeDeleteEventLoop(loop);
