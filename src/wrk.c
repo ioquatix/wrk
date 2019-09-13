@@ -369,10 +369,12 @@ static int response_complete(http_parser *parser) {
     }
 
     if (--c->pending == 0) {
+        // printf("stats_record(latency, %ld)\n", now - c->start);
         if (!stats_record(statistics.latency, now - c->start)) {
             thread->errors.timeout++;
         }
         c->delayed = cfg.delay;
+        c->start = time_us();
         aeCreateFileEvent(thread->loop, c->fd, AE_WRITABLE, socket_writeable, c);
     }
 
@@ -422,7 +424,7 @@ static void socket_writeable(aeEventLoop *loop, int fd, void *data, int mask) {
         if (cfg.dynamic) {
             script_request(thread->L, &c->request, &c->length);
         }
-        c->start   = time_us();
+        //c->start   = time_us();
         c->pending = cfg.pipeline;
     }
 
