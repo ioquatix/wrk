@@ -230,12 +230,19 @@ void script_errors(lua_State *L, errors *errors) {
         errors->status,
         errors->timeout
     };
+
+    uint64_t total = 0;
+    for (size_t i = 0; i < (sizeof(e) / sizeof(*e)); i++) {
+        total += e[i];
+    }
+
     const table_field fields[] = {
         { "connect", LUA_TNUMBER, &e[0] },
         { "read",    LUA_TNUMBER, &e[1] },
         { "write",   LUA_TNUMBER, &e[2] },
         { "status",  LUA_TNUMBER, &e[3] },
         { "timeout", LUA_TNUMBER, &e[4] },
+        { "total",   LUA_TNUMBER, &total },
         { NULL,      0,           NULL  },
     };
     lua_newtable(L);
