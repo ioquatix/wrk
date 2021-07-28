@@ -223,7 +223,7 @@ void *thread_main(void *arg) {
 
     for (uint64_t i = 0; i < thread->connections; i++) {
         connection * c = &thread->cs[i];
-        printf("connection %llu: %llu requests completed\n", i, c->complete);
+        printf("connection %" PRIu64 ": %" PRIu64 " requests completed\n", i, c->complete);
     }
 
     aeDeleteEventLoop(loop);
