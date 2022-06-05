@@ -15,7 +15,7 @@ SSL_CTX *ssl_init() {
     SSL_library_init();
     OpenSSL_add_all_algorithms();
 
-    if ((ctx = SSL_CTX_new(SSLv23_client_method()))) {
+    if ((ctx = SSL_CTX_new(TLS_client_method()))) {
         SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, NULL);
         SSL_CTX_set_verify_depth(ctx, 0);
         SSL_CTX_set_mode(ctx, SSL_MODE_AUTO_RETRY);
