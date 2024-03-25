@@ -1,17 +1,34 @@
-name: build
-
-on:
-  push:
+on: [push, pull_request]
 
 jobs:
-  build:
-    runs-on: ${{ matrix.builder }}
+  main:
     strategy:
+      fail-fast: false
       matrix:
-        builder: [macos-latest, ubuntu-latest]
+        job_name: ['linux', 'macos']
+
+        include:
+        - job_name: linux
+          os: ubuntu-latest
+          shell: bash {0}
+
+        - job_name: macos
+          os: macos-latest
+          shell: bash {0}
+
+    defaults:
+      run:
+        shell: ${{ matrix.shell }}
+
+    name: wrk-${{ matrix.job_name }}
+    runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v2
-        with:
-          fetch-depth: 0
-      - name: build
-        run: make
+    - uses: actions/checkout@v1
+
+    - run: |
+        make
+
+    - uses: actions/upload-artifact@v2
+      with:
+        name: wrk-${{ matrix.job_name }}
+        path: wrk
