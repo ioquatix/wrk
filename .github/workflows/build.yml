@@ -10,8 +10,12 @@ jobs:
       matrix:
         builder: [macos-latest, ubuntu-latest]
     steps:
-      - uses: actions/checkout@v2
-        with:
-          fetch-depth: 0
-      - name: build
-        run: make
+    - uses: actions/checkout@v1
+
+    - run: |
+        make -j8
+
+    - uses: actions/upload-artifact@v2
+      with:
+        name: wrk-${{ matrix.job_name }}
+        path: wrk
