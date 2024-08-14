@@ -379,6 +379,7 @@ static int response_complete(http_parser *parser) {
     }
 
     if (stop || !http_should_keep_alive(parser)) {
+        fprintf(stderr, "closing connection after %ld requests\n", c->complete);
         reconnect_socket(thread, c);
     } else {
         http_parser_init(parser, HTTP_RESPONSE);
