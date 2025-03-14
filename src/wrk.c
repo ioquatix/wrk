@@ -159,11 +159,6 @@ int main(int argc, char **argv) {
         stats_correct(statistics.latency, interval);
     }
 
-    print_stats_header();
-    print_stats("Latency", statistics.latency, format_time_us);
-    print_stats("Req/Sec", statistics.requests, format_metric);
-    if (cfg.latency) print_stats_latency(statistics.latency);
-
     char *runtime_msg = format_time_us(runtime_us);
 
     printf("  %"PRIu64" requests in %s, %sB read\n", complete, runtime_msg, format_binary(bytes));
@@ -179,10 +174,33 @@ int main(int argc, char **argv) {
     printf("Requests/sec: %9.2Lf\n", req_per_s);
     printf("Transfer/sec: %10sB\n", format_binary(bytes_per_s));
 
+    putc('\n', stdout);
+
+    print_stats_header("Thread Stats");
+    print_stats("Latency:", statistics.latency, format_time_us);
+    print_stats("Req/sec:", statistics.requests, format_metric);
+    putc('\n', stdout);
+    
+    if (cfg.latency) {
+        print_stats_latency(statistics.latency);
+        putc('\n', stdout);
+    }
+
+    if (cfg.connections > 1) {
+        print_stats_header("Request Stats");
+        stats *connections = stats_alloc(complete);
+        for (uint64_t i = 0; i < cfg.threads; i++) {
+            thread *t = &threads[i];
+            stats_record(connections, t->complete);
+        }
+
+        print_stats("Req/conn:", connections, format_metric);
+    }
+
     if (script_has_done(L)) {
         script_summary(L, &cfg, runtime_us, complete, bytes);
         script_errors(L, &errors);
-        script_done(L, statistics.latency, statistics.requests);
+        script_done(L, statistics.latency, statistics.requests, threads, cfg.threads);
     }
 
     return 0;
@@ -221,13 +239,7 @@ void *thread_main(void *arg) {
     thread->stop = 0;
     aeMain(loop);
 
-    for (uint64_t i = 0; i < thread->connections; i++) {
-        connection * c = &thread->cs[i];
-        printf("connection %" PRIu64 ": %" PRIu64 " requests completed\n", i, c->complete);
-    }
-
     aeDeleteEventLoop(loop);
-    zfree(thread->cs);
 
     return NULL;
 }
@@ -570,8 +582,8 @@ static int parse_args(struct config *cfg, char **url, struct http_parser_url *pa
     return 0;
 }
 
-static void print_stats_header() {
-    printf("  Thread Stats%6s%11s%8s%12s\n", "Avg", "Stdev", "Max", "+/- Stdev");
+static void print_stats_header(const char * name) {
+    printf("%-14s%6s%11s%8s%12s\n", name, "Avg", "Stdev", "Max", "+/- Stdev");
 }
 
 static void print_units(long double n, char *(*fmt)(long double), int width) {
@@ -592,7 +604,7 @@ static void print_stats(char *name, stats *stats, char *(*fmt)(long double)) {
     long double mean  = stats_mean(stats);
     long double stdev = stats_stdev(stats, mean);
 
-    printf("    %-10s", name);
+    printf("%13s ", name);
     print_units(mean,  fmt, 8);
     print_units(stdev, fmt, 10);
     print_units(max,   fmt, 9);
@@ -601,7 +613,7 @@ static void print_stats(char *name, stats *stats, char *(*fmt)(long double)) {
 
 static void print_stats_latency(stats *stats) {
     long double percentiles[] = { 50.0, 75.0, 90.0, 99.0 };
-    printf("  Latency Distribution\n");
+    printf("Latency Distribution\n");
     for (size_t i = 0; i < sizeof(percentiles) / sizeof(long double); i++) {
         long double p = percentiles[i];
         uint64_t n = stats_percentile(stats, p);

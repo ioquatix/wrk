@@ -89,12 +89,12 @@ Running
 
 Done
 
-  function done(summary, latency, requests)
+  function done(summary, latency, requests, threads)
 
-  The done() function receives a table containing result data, and two
-  statistics objects representing the per-request latency and per-thread
-  request rate. Duration and latency are microsecond values and rate is
-  measured in requests per second.
+  The done() function receives a table containing overall result data,
+  two statistics objects representing the per-request latency and per-thread
+  request rate, and a table of thread objects. Duration and latency are
+  expressed in microseconds, while the rate is measured in requests per second.
 
   latency.min              -- minimum value seen
   latency.max              -- maximum value seen
@@ -113,5 +113,11 @@ Done
       write   = N, -- total socket write errors
       status  = N, -- total HTTP status codes > 399
       timeout = N  -- total request timeouts
+    }
+  }
+
+  threads = {
+    connections = {
+      completed = N, -- total completed requests
     }
   }

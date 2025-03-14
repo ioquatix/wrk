@@ -22,6 +22,9 @@ static int script_thread_newindex(lua_State *);
 static int script_wrk_lookup(lua_State *);
 static int script_wrk_connect(lua_State *);
 
+static int script_connection_index(lua_State *);
+void script_push_connection(lua_State *L, connection *c);
+
 static void set_fields(lua_State *, int, const table_field *);
 static void set_field(lua_State *, int, char *, int);
 static int push_url_part(lua_State *, char *, struct http_parser_url *, enum http_parser_url_fields);
@@ -43,6 +46,11 @@ static const struct luaL_Reg threadlib[] = {
     { "__index",    script_thread_index    },
     { "__newindex", script_thread_newindex },
     { NULL,         NULL                   }
+};
+
+static const struct luaL_Reg connectionlib[] = {
+    { "__index", script_connection_index },
+    { NULL,      NULL                   }
 };
 
 lua_State *script_create(char *file, char *url, char **headers) {
@@ -94,6 +102,9 @@ lua_State *script_create(char *file, char *url, char **headers) {
         const char *cause = lua_tostring(L, -1);
         fprintf(stderr, "%s: %s\n", file, cause);
     }
+
+    luaL_newmetatable(L, "wrk.connection");
+    luaL_register(L, NULL, connectionlib);
 
     return L;
 }
@@ -257,14 +268,23 @@ void script_push_stats(lua_State *L, stats *s) {
     lua_setmetatable(L, -2);
 }
 
-void script_done(lua_State *L, stats *latency, stats *requests) {
+void script_push_threads(lua_State *L, thread *threads, uint64_t n_threads) {
+    lua_newtable(L);
+    for (uint64_t i = 0; i < n_threads; i++) {
+        script_push_thread(L, &threads[i]);
+        lua_rawseti(L, -2, i + 1);
+    }
+}
+
+void script_done(lua_State *L, stats *latency, stats *requests, thread *threads, uint64_t n_threads) {
     lua_getglobal(L, "done");
     lua_pushvalue(L, 1);
 
     script_push_stats(L, latency);
     script_push_stats(L, requests);
+    script_push_threads(L, threads, n_threads);
 
-    lua_call(L, 3, 0);
+    lua_call(L, 4, 0);
     lua_pop(L, 1);
 }
 
@@ -424,6 +444,13 @@ static int script_thread_stop(lua_State *L) {
 static int script_thread_index(lua_State *L) {
     thread *t = checkthread(L);
     const char *key = lua_tostring(L, 2);
+    if (!strcmp("connections", key)) {
+        lua_newtable(L);
+        for (uint64_t i = 0; i < t->connections; i++) {
+            script_push_connection(L, &t->cs[i]);
+            lua_rawseti(L, -2, i + 1);
+        }
+    }
     if (!strcmp("get",  key)) lua_pushcfunction(L, script_thread_get);
     if (!strcmp("set",  key)) lua_pushcfunction(L, script_thread_set);
     if (!strcmp("stop", key)) lua_pushcfunction(L, script_thread_stop);
@@ -582,4 +609,24 @@ char *buffer_pushlstring(lua_State *L, char *start) {
     char *end = strchr(start, 0);
     lua_pushlstring(L, start, end - start);
     return end + 1;
+}
+
+static connection *getconnection(lua_State *L) {
+    connection **c = luaL_checkudata(L, 1, "wrk.connection");
+    luaL_argcheck(L, c != NULL, 1, "'connection' expected");
+    return *c;
+}
+
+static int script_connection_index(lua_State *L) {
+    connection *c = getconnection(L);
+    const char *key = luaL_checkstring(L, 2);
+    if (!strcmp("complete", key)) lua_pushnumber(L, c->complete);
+    return 1;
+}
+
+void script_push_connection(lua_State *L, connection *c) {
+    connection **ptr = (connection **) lua_newuserdata(L, sizeof(connection *));
+    *ptr = c;
+    luaL_getmetatable(L, "wrk.connection");
+    lua_setmetatable(L, -2);
 }
