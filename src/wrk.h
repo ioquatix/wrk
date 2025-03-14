@@ -33,6 +33,7 @@ typedef struct config {
     bool     delay;
     bool     dynamic;
     bool     latency;
+    bool     verbose;
     char    *host;
     char    *script;
     SSL_CTX *ctx;

@@ -39,6 +39,7 @@ static void usage() {
            "    -s, --script      <S>  Load Lua script file       \n"
            "    -H, --header      <H>  Add header to request      \n"
            "        --latency          Print latency statistics   \n"
+           "        --verbose          Print extra data           \n"
            "        --timeout     <T>  Socket/request timeout     \n"
            "    -v, --version          Print version details      \n"
            "                                                      \n"
@@ -187,13 +188,23 @@ int main(int argc, char **argv) {
     }
 
     if (cfg.connections > 1) {
-        print_stats_header("Request Stats");
+        if (cfg.verbose) printf("Connection Stats\n");
+        
         stats *connections = stats_alloc(complete);
         for (uint64_t i = 0; i < cfg.threads; i++) {
             thread *t = &threads[i];
-            stats_record(connections, t->complete);
+            // Each connection:
+            for (uint64_t j = 0; j < t->connections; j++) {
+                connection *c = t->cs + j;
+                if (cfg.verbose) printf("  %"PRIu64" requests completed by thread %"PRIu64" connection %"PRIu64"\n", c->complete, i, j);
+
+                stats_record(connections, c->complete);
+            }
         }
 
+        if (cfg.verbose) putc('\n', stdout);
+
+        print_stats_header("Request Stats");
         print_stats("Req/conn:", connections, format_metric);
     }
 
@@ -512,6 +523,7 @@ static struct option longopts[] = {
     { "script",      required_argument, NULL, 's' },
     { "header",      required_argument, NULL, 'H' },
     { "latency",     no_argument,       NULL, 'L' },
+    { "verbose",     no_argument,       NULL, 'V' },
     { "timeout",     required_argument, NULL, 'T' },
     { "help",        no_argument,       NULL, 'h' },
     { "version",     no_argument,       NULL, 'v' },
@@ -548,6 +560,9 @@ static int parse_args(struct config *cfg, char **url, struct http_parser_url *pa
             case 'L':
                 cfg->latency = true;
                 break;
+            case 'V':
+                cfg->verbose = true;
+                break;
             case 'T':
                 if (scan_time(optarg, &cfg->timeout)) return -1;
                 cfg->timeout *= 1000;
@@ -583,7 +598,7 @@ static int parse_args(struct config *cfg, char **url, struct http_parser_url *pa
 }
 
 static void print_stats_header(const char * name) {
-    printf("%-14s%6s%11s%8s%12s\n", name, "Avg", "Stdev", "Max", "+/- Stdev");
+    printf("%-14s%12s%12s%12s%12s%12s\n", name, "Avg  ", "Stdev  ", "Min  ", "Max  ", " +/- Stdev ");
 }
 
 static void print_units(long double n, char *(*fmt)(long double), int width) {
@@ -600,14 +615,15 @@ static void print_units(long double n, char *(*fmt)(long double), int width) {
 }
 
 static void print_stats(char *name, stats *stats, char *(*fmt)(long double)) {
-    uint64_t max = stats->max;
+    uint64_t min = stats->min, max = stats->max;
     long double mean  = stats_mean(stats);
     long double stdev = stats_stdev(stats, mean);
 
     printf("%13s ", name);
-    print_units(mean,  fmt, 8);
-    print_units(stdev, fmt, 10);
-    print_units(max,   fmt, 9);
+    print_units(mean, fmt, 12);
+    print_units(stdev, fmt, 12);
+    print_units(min, fmt, 12);
+    print_units(max, fmt, 12);
     printf("%8.2Lf%%\n", stats_within_stdev(stats, mean, stdev, 1));
 }
 
