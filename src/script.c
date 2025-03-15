@@ -96,15 +96,16 @@ lua_State *script_create(char *file, char *url, char **headers) {
             lua_settable(L, 5);
         }
     }
-    lua_pop(L, 5);
+
+    luaL_newmetatable(L, "wrk.connection");
+    luaL_register(L, NULL, connectionlib);
+
+    lua_pop(L, 6);
 
     if (file && luaL_dofile(L, file)) {
         const char *cause = lua_tostring(L, -1);
         fprintf(stderr, "%s: %s\n", file, cause);
     }
-
-    luaL_newmetatable(L, "wrk.connection");
-    luaL_register(L, NULL, connectionlib);
 
     return L;
 }
