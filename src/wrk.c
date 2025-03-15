@@ -176,18 +176,17 @@ int main(int argc, char **argv) {
     printf("Transfer/sec: %10sB\n", format_binary(bytes_per_s));
 
     putc('\n', stdout);
-
     print_stats_header("Thread Stats");
     print_stats("Latency:", statistics.latency, format_time_us);
     print_stats("Req/sec:", statistics.requests, format_metric);
-    putc('\n', stdout);
     
     if (cfg.latency) {
-        print_stats_latency(statistics.latency);
         putc('\n', stdout);
+        print_stats_latency(statistics.latency);
     }
 
     if (cfg.connections > 1) {
+        putc('\n', stdout);
         if (cfg.verbose) printf("Connection Stats\n");
         
         stats *connections = stats_alloc(complete);
